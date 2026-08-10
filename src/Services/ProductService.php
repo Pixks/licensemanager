@@ -87,9 +87,16 @@ final class ProductService
         if ($this->hasProductDependencies($productId)) throw new RuntimeException('product_has_licenses');
         $timestamp = date('Y-m-d H:i:s');
         $versions = $this->versionsForProduct($productId);
-        $statement = $this->pdo->prepare('UPDATE product_versions SET deleted_at = :deleted_at, updated_at = :updated_at WHERE product_id = :product_id AND deleted_at IS NULL');
-        $statement->execute(['deleted_at' => $timestamp, 'updated_at' => $timestamp, 'product_id' => $productId]);
-        Product::updateById($this->pdo, $productId, ['deleted_at' => $timestamp, 'updated_at' => $timestamp]);
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('UPDATE product_versions SET deleted_at = :deleted_at, updated_at = :updated_at WHERE product_id = :product_id AND deleted_at IS NULL');
+            $statement->execute(['deleted_at' => $timestamp, 'updated_at' => $timestamp, 'product_id' => $productId]);
+            Product::updateById($this->pdo, $productId, ['deleted_at' => $timestamp, 'updated_at' => $timestamp]);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
         return ['product' => $product, 'versions' => $versions];
     }
     public function hasProductDependencies(int $productId): bool

@@ -41,8 +41,10 @@ final class ProductController extends Controller
     }
     public function update(Request $request, array $params): Response
     {
+        $before = $this->app->productService()->getById((int) $params['id']) ?? [];
         $this->app->productService()->updateProduct((int) $params['id'], $request->all());
-        $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'product.updated', 'product', (int) $params['id'], [], $request->all(), $request->ip());
+        $after = $this->app->productService()->getById((int) $params['id']) ?? [];
+        $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'product.updated', 'product', (int) $params['id'], $before, $after, $request->ip());
         return $this->redirect('/admin/products/' . $params['id'], 'Produkt został zapisany.');
     }
     public function storeVersion(Request $request, array $params): Response
