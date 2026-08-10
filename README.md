@@ -87,6 +87,16 @@ php bin/console create-admin
 php -S 127.0.0.1:8080 -t public
 ```
 
+## Wdrożenie „wrzucasz i działa”
+```bash
+composer install:shared-hosting
+composer check:shared-hosting
+composer smoke:shared-hosting
+```
+
+- pełna instrukcja: [`docs/deployment.md`](docs/deployment.md)
+- paczka ZIP do wrzucenia na serwer: `composer build:zip`
+
 ## Testy
 ```bash
 composer test

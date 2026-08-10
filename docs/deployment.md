@@ -1,24 +1,38 @@
 # Wdrożenie na hostingu współdzielonym
 
-## Wybór stacku
-Projekt używa lekkiego MVC opartego o PHP 8.2, PDO i Composer autoload. Laravel był preferowany, ale w tym środowisku nie udało się pobrać jego szkieletu z GitHub bez autoryzacji, więc wybrano własny stack w pełni zgodny z hostingiem współdzielonym.
-
-## Kroki wdrożenia
-1. Utwórz bazę MySQL/MariaDB i użytkownika.
-2. Skopiuj `.env.example` do `.env` i uzupełnij sekrety.
-3. Uruchom:
+## Szybka checklista („jak WordPress”)
+1. Wgraj projekt na hosting.
+2. Ustaw domenę tak, aby document root wskazywał na katalog `public/`.
+3. Uruchom instalator:
    ```bash
-   composer dump-autoload
-   php bin/console migrate
-   php bin/console seed:roles
-   php bin/console create-admin
+   composer install:shared-hosting
    ```
-4. Wgraj pliki na hosting.
-5. Ustaw document root na katalog `public`.
-6. Jeżeli hosting wymusza `public_html`, przenieś zawartość `public/` do `public_html/` i popraw ścieżki w `index.php`, aby wskazywały na katalog projektu poza webrootem.
-7. Nadaj zapis dla `storage/cache`, `storage/logs`, `storage/app/private`.
-8. Włącz HTTPS i pozostaw `APP_FORCE_HTTPS=true`.
-9. Dodaj cron.
+4. Uruchom walidację środowiska:
+   ```bash
+   composer check:shared-hosting
+   ```
+5. Dodaj cron (CLI albo HTTP).
+6. Uruchom szybki smoke test:
+   ```bash
+   composer smoke:shared-hosting
+   ```
+
+## Co robi `setup:install`
+- tworzy `.env` z `.env.example` (jeśli brak),
+- pyta tylko o podstawowe dane (`APP_URL`, DB, admin),
+- generuje `APP_KEY` i `CRON_SECRET` jeśli są placeholderami,
+- uruchamia migracje, seed ról i tworzy konto admina.
+
+## Wariant dla hostingu z wymuszonym `public_html`
+Jeśli nie możesz wskazać document root bezpośrednio na `public/`:
+1. Trzymaj cały projekt poza webrootem (np. `~/licensemanager`).
+2. Skopiuj **zawartość** katalogu `public/` do `public_html/`.
+3. W `public_html/index.php` zmień ścieżki tak, aby wskazywały na katalog projektu, np.:
+   ```php
+   require_once __DIR__ . '/../licensemanager/bootstrap/functions.php';
+   $app = require base_path('bootstrap/app.php');
+   ```
+4. Skopiuj `public/.htaccess` do `public_html/.htaccess`.
 
 ### Cron CLI
 ```bash
@@ -29,3 +43,27 @@ Projekt używa lekkiego MVC opartego o PHP 8.2, PDO i Composer autoload. Laravel
 ```bash
 0 */6 * * * /usr/bin/curl -fsS "https://licenses.example.com/cron/run?secret=YOUR_CRON_SECRET" >/dev/null
 ```
+
+## Walidacja domeny i HTTPS
+Komenda:
+```bash
+composer check:shared-hosting
+```
+sprawdza:
+- poprawność `APP_URL`,
+- zgodność `APP_FORCE_HTTPS=true` z adresem `https://...`,
+- obecność i jakość `CRON_SECRET`,
+- połączenie z bazą,
+- zapisywalność `storage/cache`, `storage/logs`, `storage/app/private`.
+
+## Szybki test powdrożeniowy
+```bash
+composer smoke:shared-hosting
+```
+Domyślnie test bierze URL z `APP_URL` i sprawdza odpowiedź panelu oraz API.
+
+## Paczka production-ready (ZIP)
+```bash
+composer build:zip
+```
+Gotowa paczka pojawi się w `storage/releases/`.

@@ -16,6 +16,10 @@
   },
   "scripts": {
     "serve": "php -S 127.0.0.1:8080 -t public",
+    "install:shared-hosting": "php bin/console setup:install",
+    "check:shared-hosting": "php bin/console setup:check",
+    "smoke:shared-hosting": "php bin/console setup:smoke",
+    "build:zip": "php bin/console build:zip",
     "migrate": "php bin/console migrate",
     "seed": "php bin/console seed:roles",
     "create-admin": "php bin/console create-admin",

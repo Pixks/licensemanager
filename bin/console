@@ -4,6 +4,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap/functions.php';
+
+use App\Support\DeploymentHelper;
+
 $app = require base_path('bootstrap/app.php');
 $command = $argv[1] ?? 'help';
 switch ($command) {
@@ -26,6 +29,14 @@ switch ($command) {
     case 'cron:run':
         echo json_encode($app->maintenanceService()->runAll(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
         break;
+    case 'setup:install':
+        exit(DeploymentHelper::install(base_path()));
+    case 'setup:check':
+        exit(DeploymentHelper::check(base_path()));
+    case 'setup:smoke':
+        exit(DeploymentHelper::smoke(base_path(), $argv[2] ?? null));
+    case 'build:zip':
+        exit(DeploymentHelper::buildZip(base_path(), $argv[2] ?? null));
     default:
-        echo "Available commands:\n  php bin/console migrate\n  php bin/console seed:roles\n  php bin/console create-admin [email] [password] [name] [role]\n  php bin/console cron:run\n";
+        echo "Available commands:\n  php bin/console migrate\n  php bin/console seed:roles\n  php bin/console create-admin [email] [password] [name] [role]\n  php bin/console cron:run\n  php bin/console setup:install\n  php bin/console setup:check\n  php bin/console setup:smoke [url]\n  php bin/console build:zip [output-zip-path]\n";
 }
