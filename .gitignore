@@ -1,0 +1,12 @@
+/vendor/
+/.phpunit.result.cache
+/.env
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/app/private/*
+!/storage/app/private/.gitkeep
+/storage/app/private/packages/*
+!/storage/app/private/packages/.gitkeep
+/database/testing.sqlite

@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "^(\.env|composer\.(json|lock)|phpunit\.xml)$">
+  Require all denied
+</FilesMatch>
