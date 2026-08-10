@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use App\Database\Migration;
-use PDO;
-
 return new class extends Migration {
-    public function up(PDO $pdo): void
+    public function up(\PDO $pdo): void
     {
         $this->exec($pdo, 'CREATE TABLE IF NOT EXISTS roles (id ' . $this->idColumn($pdo) . ', name ' . $this->stringType(100) . ' NOT NULL, slug ' . $this->stringType(100) . ' NOT NULL, description ' . $this->textType() . ' NULL, ' . $this->createdUpdated($pdo) . ', ' . $this->softDeletes() . ', UNIQUE(slug))');
         $this->exec($pdo, 'CREATE TABLE IF NOT EXISTS permissions (id ' . $this->idColumn($pdo) . ', name ' . $this->stringType(120) . ' NOT NULL, slug ' . $this->stringType(120) . ' NOT NULL, description ' . $this->textType() . ' NULL, ' . $this->createdUpdated($pdo) . ', ' . $this->softDeletes() . ', UNIQUE(slug))');

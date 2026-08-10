@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use App\Database\Migration;
-use PDO;
-
 return new class extends Migration {
-    public function up(PDO $pdo): void
+    public function up(\PDO $pdo): void
     {
         $this->exec($pdo, 'CREATE TABLE IF NOT EXISTS download_tokens (id ' . $this->idColumn($pdo) . ', product_id ' . $this->foreignId($pdo) . ', product_version_id ' . $this->foreignId($pdo) . ', license_id ' . $this->foreignId($pdo) . ', canonical_domain ' . $this->stringType(190) . ' NOT NULL, token_hash ' . $this->stringType(64) . ' NOT NULL, expires_at ' . $this->dateTimeType() . ' NOT NULL, used_at ' . $this->dateTimeType() . ' NULL, issued_ip ' . $this->stringType(64) . ' NULL, ' . $this->createdUpdated($pdo) . ', ' . $this->softDeletes() . ', FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE, FOREIGN KEY (product_version_id) REFERENCES product_versions(id) ON DELETE CASCADE, FOREIGN KEY (license_id) REFERENCES licenses(id) ON DELETE CASCADE, UNIQUE(token_hash))');
         $this->exec($pdo, 'CREATE INDEX IF NOT EXISTS idx_download_tokens_expires ON download_tokens(expires_at, used_at)');
