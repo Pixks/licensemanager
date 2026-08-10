@@ -121,9 +121,11 @@ final class DeploymentHelper
         ];
         $failed = false;
         foreach ($checks as $check) {
-            $status = self::requestStatus($baseUrl . $check['path']);
+            $result = self::request($baseUrl . $check['path']);
+            $status = $result['status'];
             $ok = in_array($status, $check['allowed'], true);
-            echo ($ok ? '[OK]' : '[ERROR]') . " {$check['path']} -> {$status}\n";
+            $suffix = $result['error'] !== null ? " ({$result['error']})" : '';
+            echo ($ok ? '[OK]' : '[ERROR]') . " {$check['path']} -> {$status}{$suffix}\n";
             if (!$ok) $failed = true;
         }
         return $failed ? 1 : 0;
@@ -208,13 +210,13 @@ final class DeploymentHelper
             [$key] = explode('=', $line, 2);
             $key = trim($key);
             if (!array_key_exists($key, $updates)) continue;
-            $line = $key . '=' . $updates[$key];
+            $line = $key . '=' . self::encodeEnvValue((string) $updates[$key]);
             $written[$key] = true;
         }
         unset($line);
         foreach ($updates as $key => $value) {
             if (isset($written[$key])) continue;
-            $lines[] = $key . '=' . $value;
+            $lines[] = $key . '=' . self::encodeEnvValue((string) $value);
         }
         file_put_contents($path, implode(PHP_EOL, $lines) . PHP_EOL);
     }
@@ -227,14 +229,27 @@ final class DeploymentHelper
         return false;
     }
 
-    private static function requestStatus(string $url): int
+    private static function encodeEnvValue(string $value): string
+    {
+        if ($value !== '' && preg_match('/^[A-Za-z0-9._:@\/-]+$/', $value) === 1) return $value;
+        $escaped = str_replace(['\\', '"'], ['\\\\', '\"'], $value);
+        return '"' . $escaped . '"';
+    }
+
+    private static function request(string $url): array
     {
         $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 15, 'ignore_errors' => true], 'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]]);
-        @file_get_contents($url, false, $context);
+        $warning = null;
+        set_error_handler(static function (int $severity, string $message) use (&$warning): bool {
+            $warning = $message;
+            return true;
+        });
+        file_get_contents($url, false, $context);
+        restore_error_handler();
         $headers = $http_response_header ?? [];
         foreach ($headers as $header) {
-            if (preg_match('/^HTTP\/\S+\s+(\d{3})/i', $header, $match) === 1) return (int) $match[1];
+            if (preg_match('/^HTTP\/\S+\s+(\d{3})/i', $header, $match) === 1) return ['status' => (int) $match[1], 'error' => $warning];
         }
-        return 0;
+        return ['status' => 0, 'error' => $warning];
     }
 }
