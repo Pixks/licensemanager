@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ProductVersion;
 use PDO;
+use RuntimeException;
 
 final class ProductService
 {
@@ -32,6 +33,46 @@ final class ProductService
         return $version;
     }
     public function versionsForProduct(int $productId): array { $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND deleted_at IS NULL ORDER BY published_at DESC, id DESC'); $s->execute(['product_id' => $productId]); return $s->fetchAll() ?: []; }
+    public function getVersionById(int $productId, int $versionId): ?array
+    {
+        $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE id = :id AND product_id = :product_id AND deleted_at IS NULL LIMIT 1');
+        $s->execute(['id' => $versionId, 'product_id' => $productId]);
+        return $s->fetch() ?: null;
+    }
+    public function updateVersion(int $productId, int $versionId, array $data): ?array
+    {
+        $current = $this->getVersionById($productId, $versionId);
+        if (!$current) return null;
+        $payload = [
+            'version' => $data['version'],
+            'published_at' => $data['published_at'] ?? null,
+            'changelog' => $data['changelog'] ?? '',
+            'min_wordpress_version' => $data['min_wordpress_version'] ?? null,
+            'min_php_version' => $data['min_php_version'] ?? null,
+            'channel' => $data['channel'] ?? 'stable',
+            'release_status' => $data['release_status'] ?? 'draft',
+            'updated_at' => date('Y-m-d H:i:s'),
+        ];
+        if (isset($data['zip_path'], $data['sha256_hash'])) {
+            $payload['zip_path'] = $data['zip_path'];
+            $payload['sha256_hash'] = $data['sha256_hash'];
+        }
+        ProductVersion::updateById($this->pdo, $versionId, $payload);
+        if (($payload['release_status'] ?? 'draft') === 'published') {
+            $this->syncCurrentVersion($productId, (string) $payload['version']);
+        } else {
+            $this->refreshCurrentVersion($productId);
+        }
+        return $this->getVersionById($productId, $versionId);
+    }
+    public function deleteVersion(int $productId, int $versionId): ?array
+    {
+        $version = $this->getVersionById($productId, $versionId);
+        if (!$version) return null;
+        ProductVersion::updateById($this->pdo, $versionId, ['deleted_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+        $this->refreshCurrentVersion($productId);
+        return $version;
+    }
     public function latestVersionForChannel(int $productId, string $channel = 'stable'): ?array
     {
         $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND release_status = "published" AND deleted_at IS NULL AND (channel = :primary_channel OR (:requested_channel = "beta" AND channel = "stable"))');
@@ -39,4 +80,38 @@ final class ProductService
         if ($versions === []) return null; usort($versions, static fn (array $a, array $b): int => version_compare($b['version'], $a['version'])); return $versions[0] ?? null;
     }
     public function syncCurrentVersion(int $productId, string $version): void { Product::updateById($this->pdo, $productId, ['current_version' => $version, 'updated_at' => date('Y-m-d H:i:s')]); }
+    public function deleteProduct(int $productId): ?array
+    {
+        $product = $this->getById($productId);
+        if (!$product) return null;
+        if ($this->hasProductDependencies($productId)) throw new RuntimeException('product_has_licenses');
+        $timestamp = date('Y-m-d H:i:s');
+        $versions = $this->versionsForProduct($productId);
+        $statement = $this->pdo->prepare('UPDATE product_versions SET deleted_at = :deleted_at, updated_at = :updated_at WHERE product_id = :product_id AND deleted_at IS NULL');
+        $statement->execute(['deleted_at' => $timestamp, 'updated_at' => $timestamp, 'product_id' => $productId]);
+        Product::updateById($this->pdo, $productId, ['deleted_at' => $timestamp, 'updated_at' => $timestamp]);
+        return ['product' => $product, 'versions' => $versions];
+    }
+    public function hasProductDependencies(int $productId): bool
+    {
+        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM licenses WHERE product_id = :product_id AND deleted_at IS NULL');
+        $statement->execute(['product_id' => $productId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+    public function refreshCurrentVersion(int $productId): void
+    {
+        $product = $this->getById($productId);
+        if (!$product) return;
+        $versions = $this->versionsForProduct($productId);
+        $published = array_values(array_filter($versions, static fn (array $version): bool => ($version['release_status'] ?? '') === 'published'));
+        if ($published === []) {
+            Product::updateById($this->pdo, $productId, ['current_version' => null, 'updated_at' => date('Y-m-d H:i:s')]);
+            return;
+        }
+        usort($published, static fn (array $a, array $b): int => version_compare((string) $b['version'], (string) $a['version']));
+        $preferredChannel = (string) ($product['default_channel'] ?? 'stable');
+        $preferred = array_values(array_filter($published, static fn (array $version): bool => ($version['channel'] ?? 'stable') === $preferredChannel));
+        $selected = $preferred[0] ?? $published[0];
+        Product::updateById($this->pdo, $productId, ['current_version' => $selected['version'], 'updated_at' => date('Y-m-d H:i:s')]);
+    }
 }

@@ -25,7 +25,10 @@ $router->get('/admin/products/create', [ProductController::class, 'create'], $wr
 $router->post('/admin/products', [ProductController::class, 'store'], $write);
 $router->get('/admin/products/{id}', [ProductController::class, 'show'], $admin);
 $router->post('/admin/products/{id}', [ProductController::class, 'update'], $write);
+$router->post('/admin/products/{id}/delete', [ProductController::class, 'destroy'], $write);
 $router->post('/admin/products/{id}/versions', [ProductController::class, 'storeVersion'], $write);
+$router->post('/admin/products/{id}/versions/{versionId}', [ProductController::class, 'updateVersion'], $write);
+$router->post('/admin/products/{id}/versions/{versionId}/delete', [ProductController::class, 'deleteVersion'], $write);
 $router->get('/admin/licenses', [LicenseController::class, 'index'], $admin);
 $router->get('/admin/licenses/create', [LicenseController::class, 'create'], $write);
 $router->post('/admin/licenses', [LicenseController::class, 'store'], $write);
