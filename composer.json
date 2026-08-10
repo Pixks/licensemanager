@@ -1,0 +1,30 @@
+{
+  "name": "pixks/licensemanager",
+  "description": "Shared-hosting friendly PHP license and update server for private WordPress plugins.",
+  "type": "project",
+  "require": {
+    "php": "^8.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/",
+      "Database\\Seeders\\": "database/seeders/"
+    },
+    "files": [
+      "bootstrap/functions.php"
+    ]
+  },
+  "scripts": {
+    "serve": "php -S 127.0.0.1:8080 -t public",
+    "migrate": "php bin/console migrate",
+    "seed": "php bin/console seed:roles",
+    "create-admin": "php bin/console create-admin",
+    "cron": "php bin/console cron:run",
+    "test": "phpunit --configuration phpunit.xml"
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

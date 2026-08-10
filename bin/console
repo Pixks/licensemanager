@@ -1,0 +1,31 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../bootstrap/functions.php';
+$app = require base_path('bootstrap/app.php');
+$command = $argv[1] ?? 'help';
+switch ($command) {
+    case 'migrate':
+        $app->migrator()->migrate();
+        echo "Migrations completed.\n";
+        break;
+    case 'seed:roles':
+        (new Database\Seeders\RoleSeeder($app))->run();
+        echo "Roles and permissions seeded.\n";
+        break;
+    case 'create-admin':
+        $email = $argv[2] ?? env('INITIAL_ADMIN_EMAIL', 'admin@example.com');
+        $password = $argv[3] ?? env('INITIAL_ADMIN_PASSWORD', 'ChangeMe123!');
+        $name = $argv[4] ?? env('INITIAL_ADMIN_NAME', 'Super Admin');
+        $role = $argv[5] ?? 'superadmin';
+        $app->userService()->createOrUpdateAdmin($name, $email, $password, $role);
+        echo "Administrator ready: {$email}\n";
+        break;
+    case 'cron:run':
+        echo json_encode($app->maintenanceService()->runAll(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        break;
+    default:
+        echo "Available commands:\n  php bin/console migrate\n  php bin/console seed:roles\n  php bin/console create-admin [email] [password] [name] [role]\n  php bin/console cron:run\n";
+}
