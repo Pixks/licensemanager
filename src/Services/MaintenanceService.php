@@ -8,6 +8,13 @@ use PDO;
 
 final class MaintenanceService
 {
+    private const ALLOWED_LOG_TABLES = [
+        'api_request_logs',
+        'security_events',
+        'download_logs',
+        'audit_logs',
+    ];
+
     public function __construct(private readonly PDO $pdo, private readonly array $securityConfig) {}
     public function runAll(): array
     {
@@ -19,5 +26,16 @@ final class MaintenanceService
         $s->execute(['updated_at' => date('Y-m-d H:i:s'), 'now' => date('Y-m-d H:i:s')]); return $s->rowCount();
     }
     public function cleanupExpiredTokens(): int { $s = $this->pdo->prepare('DELETE FROM download_tokens WHERE expires_at < :now OR used_at IS NOT NULL'); $s->execute(['now' => date('Y-m-d H:i:s')]); return $s->rowCount(); }
-    private function cleanupLogs(string $table, int $days): int { $s = $this->pdo->prepare('DELETE FROM ' . $table . ' WHERE created_at < :threshold'); $s->execute(['threshold' => date('Y-m-d H:i:s', strtotime('-' . $days . ' days'))]); return $s->rowCount(); }
+    private function cleanupLogs(string $table, int $days): int
+    {
+        if (!in_array($table, self::ALLOWED_LOG_TABLES, true)) {
+            throw new \InvalidArgumentException('Unsupported cleanup table.');
+        }
+        if ($days <= 0) {
+            throw new \InvalidArgumentException('Retention days must be greater than zero.');
+        }
+        $s = $this->pdo->prepare('DELETE FROM ' . $table . ' WHERE created_at < :threshold');
+        $s->execute(['threshold' => date('Y-m-d H:i:s', strtotime('-' . $days . ' days'))]);
+        return $s->rowCount();
+    }
 }

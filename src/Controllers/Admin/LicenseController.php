@@ -46,7 +46,12 @@ final class LicenseController extends Controller
     {
         $licenses = $this->app->licenseService()->searchLicenses($request->all()); $lines = [['id', 'product', 'status', 'masked_key', 'email', 'activation_limit', 'activations_in_use', 'expires_at']];
         foreach ($licenses as $license) $lines[] = [$license['id'], $license['product_name'], $license['status'], $license['masked_key'], $license['customer_email'], $license['activation_limit'], $license['activations_in_use'], $license['expires_at']];
-        $body = ''; foreach ($lines as $line) $body .= implode(',', array_map(static fn ($value): string => '"' . str_replace('"', '""', (string) $value) . '"', $line)) . "\n";
+        $body = ''; foreach ($lines as $line) $body .= implode(',', array_map(fn ($value): string => '"' . str_replace('"', '""', $this->sanitizeCsvCell((string) $value)) . '"', $line)) . "\n";
         return new Response($body, 200, ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Disposition' => 'attachment; filename="licenses.csv"']);
+    }
+
+    private function sanitizeCsvCell(string $value): string
+    {
+        return preg_match('/^[=+\-@]/', $value) ? "\t" . $value : $value;
     }
 }

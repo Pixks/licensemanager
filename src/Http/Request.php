@@ -54,7 +54,17 @@ final class Request
         $lookup = 'HTTP_' . strtoupper(str_replace('-', '_', $key));
         return $this->server[$lookup] ?? $this->server[strtoupper(str_replace('-', '_', $key))] ?? $default;
     }
-    public function ip(): string { return (string) ($this->header('X-Forwarded-For') ?: $this->server['REMOTE_ADDR'] ?? '0.0.0.0'); }
+    public function ip(): string
+    {
+        $forwardedFor = trim((string) $this->header('X-Forwarded-For', ''));
+        if ($forwardedFor !== '') {
+            $parts = array_map('trim', explode(',', $forwardedFor));
+            if ($parts[0] !== '') {
+                return $parts[0];
+            }
+        }
+        return (string) ($this->server['REMOTE_ADDR'] ?? '0.0.0.0');
+    }
     public function userAgent(): string { return (string) ($this->server['HTTP_USER_AGENT'] ?? ''); }
     public function isSecure(): bool
     {

@@ -34,8 +34,8 @@ final class ProductService
     public function versionsForProduct(int $productId): array { $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND deleted_at IS NULL ORDER BY published_at DESC, id DESC'); $s->execute(['product_id' => $productId]); return $s->fetchAll() ?: []; }
     public function latestVersionForChannel(int $productId, string $channel = 'stable'): ?array
     {
-        $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND release_status = "published" AND deleted_at IS NULL AND (channel = :channel OR (:channel = "beta" AND channel = "stable")) ORDER BY published_at DESC, id DESC');
-        $s->execute(['product_id' => $productId, 'channel' => $channel]); $versions = $s->fetchAll() ?: [];
+        $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND release_status = "published" AND deleted_at IS NULL AND (channel = :primary_channel OR (:requested_channel = "beta" AND channel = "stable"))');
+        $s->execute(['product_id' => $productId, 'primary_channel' => $channel, 'requested_channel' => $channel]); $versions = $s->fetchAll() ?: [];
         if ($versions === []) return null; usort($versions, static fn (array $a, array $b): int => version_compare($b['version'], $a['version'])); return $versions[0] ?? null;
     }
     public function syncCurrentVersion(int $productId, string $version): void { Product::updateById($this->pdo, $productId, ['current_version' => $version, 'updated_at' => date('Y-m-d H:i:s')]); }

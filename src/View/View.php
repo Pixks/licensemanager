@@ -11,10 +11,19 @@ final class View
     {
         $templateFile = $this->basePath . '/' . $template . '.php';
         if (!is_file($templateFile)) throw new \RuntimeException('View not found: ' . $template);
-        extract($data, EXTR_SKIP);
-        ob_start(); include $templateFile; $content = (string) ob_get_clean();
+        $content = $this->renderFile($templateFile, $data);
         $layoutFile = $this->basePath . '/' . $layout . '.php';
         if (!is_file($layoutFile)) return $content;
-        ob_start(); include $layoutFile; return (string) ob_get_clean();
+        return $this->renderFile($layoutFile, array_merge($data, ['content' => $content]));
+    }
+
+    private function renderFile(string $file, array $data): string
+    {
+        ob_start();
+        (static function (string $__file, array $__data): void {
+            extract($__data, EXTR_SKIP);
+            include $__file;
+        })($file, $data);
+        return (string) ob_get_clean();
     }
 }

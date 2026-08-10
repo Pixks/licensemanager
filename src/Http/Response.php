@@ -6,6 +6,8 @@ namespace App\Http;
 
 final class Response
 {
+    public ?string $filePath = null;
+
     public function __construct(public string $body = '', public int $status = 200, public array $headers = []) {}
     public static function html(string $body, int $status = 200, array $headers = []): self
     {
@@ -26,13 +28,23 @@ final class Response
             'Content-Disposition' => 'attachment; filename="' . $downloadName . '"',
             'X-Accel-Buffering' => 'no',
         ], $headers);
-        return new self((string) file_get_contents($filePath), 200, $headers);
+        $response = new self('', 200, $headers);
+        $response->filePath = $filePath;
+        return $response;
     }
     public function send(): void
     {
         http_response_code($this->status);
         foreach ($this->headers as $name => $value) {
             header($name . ': ' . $value, true);
+        }
+        if ($this->filePath !== null) {
+            $handle = fopen($this->filePath, 'rb');
+            if ($handle !== false) {
+                fpassthru($handle);
+                fclose($handle);
+            }
+            return;
         }
         echo $this->body;
     }

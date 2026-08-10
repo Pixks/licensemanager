@@ -101,8 +101,9 @@ final class LicenseService
         $limit = (int) $license['activation_limit'];
         if ($limit > 0 && $this->activeActivationsCount((int) $license['id']) >= $limit) throw new RuntimeException('activation_limit_reached');
         $activation = LicenseActivation::create($this->pdo, ['license_id' => (int) $license['id'], 'product_id' => (int) $product['id'], 'domain' => $domain, 'canonical_domain' => $canonicalDomain, 'site_url' => $this->domainService->normalizeSiteUrl($siteUrl), 'fingerprint' => $fingerprint, 'ip_address' => $ip, 'user_agent' => $userAgent, 'activated_at' => date('Y-m-d H:i:s'), 'last_checked_at' => date('Y-m-d H:i:s'), 'activation_status' => 'active', 'deactivated_at' => null, 'deactivation_reason' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'), 'deleted_at' => null])->attributes;
-        License::updateById($this->pdo, (int) $license['id'], ['activations_in_use' => $this->activeActivationsCount((int) $license['id']), 'first_activated_at' => $license['first_activated_at'] ?: date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
-        return ['product' => $product, 'license' => array_merge($license, ['activations_in_use' => $this->activeActivationsCount((int) $license['id'])]), 'activation' => array_merge($activation, ['reused' => false]), 'status' => $this->statusForLicense($license)];
+        $activationsInUse = $this->activeActivationsCount((int) $license['id']);
+        License::updateById($this->pdo, (int) $license['id'], ['activations_in_use' => $activationsInUse, 'first_activated_at' => $license['first_activated_at'] ?: date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+        return ['product' => $product, 'license' => array_merge($license, ['activations_in_use' => $activationsInUse]), 'activation' => array_merge($activation, ['reused' => false]), 'status' => $this->statusForLicense($license)];
     }
     public function deactivate(string $productSlug, string $licenseKey, string $domain, string $reason = 'client_request'): array
     {

@@ -11,9 +11,34 @@ final class RateLimiterService
     {
         $file = $this->storagePath . '/' . sha1($key) . '.json';
         $now = time();
-        $entries = is_file($file) ? (json_decode((string) file_get_contents($file), true) ?: []) : [];
+        $handle = fopen($file, 'c+');
+        if ($handle === false) {
+            return true;
+        }
+
+        flock($handle, LOCK_EX);
+        $contents = stream_get_contents($handle) ?: '';
+        $entries = json_decode($contents, true) ?: [];
         $entries = array_values(array_filter($entries, static fn (int $timestamp): bool => $timestamp > $now - $window));
-        if (count($entries) >= $limit) { file_put_contents($file, json_encode($entries)); return false; }
-        $entries[] = $now; file_put_contents($file, json_encode($entries)); return true;
+
+        if (count($entries) >= $limit) {
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, (string) json_encode($entries));
+            fflush($handle);
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return false;
+        }
+
+        $entries[] = $now;
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, (string) json_encode($entries));
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+
+        return true;
     }
 }
