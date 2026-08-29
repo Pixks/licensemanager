@@ -65,11 +65,11 @@ final class LicenseController extends Controller
     }
     public function resetChannel(Request $request, array $params): Response
     {
-        $pdo = $this->app->db(); $before = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $before->execute(['id' => $params['id']]); $current = $before->fetch() ?: [];
-        if ($current === []) return $this->redirect('/admin/licenses', 'Nie znaleziono licencji.', 'error');
+        $current = $this->app->licenseService()->getById((int) $params['id']);
+        if (!$current) return $this->redirect('/admin/licenses', 'Nie znaleziono licencji.', 'error');
         $this->app->licenseService()->resetChannel((int) $params['id']);
-        $after = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $after->execute(['id' => $params['id']]);
-        $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'license.channel_reset', 'license', (int) $params['id'], $current, $after->fetch() ?: [], $request->ip());
+        $after = $this->app->licenseService()->getById((int) $params['id']) ?? [];
+        $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'license.channel_reset', 'license', (int) $params['id'], $current, $after, $request->ip());
         return $this->redirect('/admin/licenses/' . $params['id'], 'Blokada kanału została zresetowana.');
     }
     public function addDomainRule(Request $request, array $params): Response

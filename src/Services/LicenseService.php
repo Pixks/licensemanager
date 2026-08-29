@@ -52,6 +52,12 @@ final class LicenseService
         }
         return $data;
     }
+    public function getById(int $licenseId): ?array
+    {
+        $s = $this->pdo->prepare('SELECT * FROM licenses WHERE id = :id AND deleted_at IS NULL LIMIT 1');
+        $s->execute(['id' => $licenseId]);
+        return $s->fetch() ?: null;
+    }
     public function findLicenseByPlainKey(string $licenseKey): ?array { $s = $this->pdo->prepare('SELECT * FROM licenses WHERE key_hash = :key_hash AND deleted_at IS NULL LIMIT 1'); $s->execute(['key_hash' => $this->licenseKeyService->hash($licenseKey)]); return $s->fetch() ?: null; }
     public function searchLicenses(array $filters = []): array
     {
