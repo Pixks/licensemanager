@@ -76,6 +76,14 @@ final class LicenseFlowTest extends TestCase
         self::assertSame('/admin/licenses/' . $license['record']['id'], $response->headers['Location'] ?? null);
         self::assertNull($this->app->licenseService()->findLicenseByPlainKey($license['plain_key'])['active_channel'] ?? null);
     }
+    public function test_reset_channel_for_missing_license_returns_error_redirect(): void
+    {
+        $controller = new LicenseController($this->app);
+        $response = $controller->resetChannel($this->makePostRequest('/admin/licenses/999/reset-channel'), ['id' => '999']);
+        self::assertSame(302, $response->status);
+        self::assertSame('/admin/licenses', $response->headers['Location'] ?? null);
+        self::assertSame('Nie znaleziono licencji.', $_SESSION['_flash']['error'] ?? null);
+    }
     public function test_download_token_can_be_generated_and_validates(): void
     {
         $product = $this->createProduct(); $version = $this->addVersion((int) $product['id'], '1.1.0'); $license = $this->createLicense((int) $product['id']); $token = $this->app->downloadTokenService()->create((int) $product['id'], (int) $version['id'], (int) $license['record']['id'], 'example.com', '127.0.0.1'); $validated = $this->app->downloadTokenService()->validate($token['plain']); self::assertSame($token['record']['id'], $validated['id']);
