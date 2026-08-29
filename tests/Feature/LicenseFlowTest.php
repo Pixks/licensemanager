@@ -78,10 +78,12 @@ final class LicenseFlowTest extends TestCase
     }
     public function test_reset_channel_for_missing_license_returns_error_redirect(): void
     {
+        $_SESSION = [];
         $controller = new LicenseController($this->app);
         $response = $controller->resetChannel($this->makePostRequest('/admin/licenses/999/reset-channel'), ['id' => '999']);
         self::assertSame(302, $response->status);
         self::assertSame('/admin/licenses', $response->headers['Location'] ?? null);
+        self::assertSame('Nie znaleziono licencji.', $_SESSION['_flash']['error'] ?? null);
     }
     public function test_download_token_can_be_generated_and_validates(): void
     {
