@@ -27,7 +27,7 @@ $allowedChannels = array_map('trim', explode(',', (string) ($license['allowed_ch
         <div class="card shadow-sm mb-4">
             <div class="card-body">
                 <h2 class="h6 mb-3 fw-semibold">Szczegóły licencji</h2>
-                <form method="post" action="/admin/licenses/<?= e((string) $license['id']) ?>">
+                <form id="license-edit-form" method="post" action="/admin/licenses/<?= e((string) $license['id']) ?>">
                     <input type="hidden" name="<?= e($csrfTokenName) ?>" value="<?= e($csrfToken) ?>">
                     <div class="mb-3">
                         <label class="form-label">Produkt</label>
@@ -237,7 +237,7 @@ $allowedChannels = array_map('trim', explode(',', (string) ($license['allowed_ch
     supportActive.addEventListener('change', syncDates);
     syncDates();
 
-    document.querySelector('form').addEventListener('submit', function () {
+    document.getElementById('license-edit-form').addEventListener('submit', function () {
         [expiresAt, updatesExpiresAt, supportExpiresAt].forEach(function (f) { f.disabled = false; });
     });
 }());

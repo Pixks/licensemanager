@@ -1,12 +1,3 @@
-<?php
-$kpis = [
-    ['icon' => 'bi-key', 'color' => 'primary', 'label' => 'Aktywne licencje', 'value' => $stats['Aktywne licencje'] ?? $stats[array_key_first($stats)] ?? 0],
-    ['icon' => 'bi-globe', 'color' => 'success', 'label' => 'Aktywacje', 'value' => $stats['Aktywne aktywacje'] ?? ($stats[array_keys($stats)[1] ?? ''] ?? 0)],
-    ['icon' => 'bi-box-seam', 'color' => 'info', 'label' => 'Produkty', 'value' => $stats['Produkty'] ?? ($stats[array_keys($stats)[2] ?? ''] ?? 0)],
-    ['icon' => 'bi-activity', 'color' => 'warning', 'label' => 'Żądania API (24h)', 'value' => $stats['Żądania API (24h)'] ?? ($stats[array_keys($stats)[3] ?? ''] ?? 0)],
-];
-$statValues = array_values($stats);
-?>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h4 mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
 </div>

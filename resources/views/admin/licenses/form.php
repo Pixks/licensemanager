@@ -15,7 +15,7 @@ $productPlansJson = json_encode(array_map(static function (array $p): array {
             <div class="card-body p-4">
                 <h1 class="h4 mb-1">Generator licencji</h1>
                 <p class="text-muted mb-4 small">Wygenerowane klucze zostaną pokazane po zapisaniu — skopiuj je od razu.</p>
-                <form method="post" action="/admin/licenses">
+                <form id="license-create-form" method="post" action="/admin/licenses">
                     <input type="hidden" name="<?= e($csrfTokenName) ?>" value="<?= e($csrfToken) ?>">
 
                     <!-- SEKCJA: Podstawowe -->
@@ -31,7 +31,7 @@ $productPlansJson = json_encode(array_map(static function (array $p): array {
                         </div>
                         <div class="col-md-4" id="lf_plan_wrap">
                             <label class="form-label fw-medium">Plan <span class="text-danger">*</span></label>
-                            <select name="plan_name" id="lf_plan_select" class="form-select" style="display:none"></select>
+                            <select id="lf_plan_select" class="form-select" style="display:none"></select>
                             <input name="plan_name" id="lf_plan_free" class="form-control" placeholder="np. pro" value="pro">
                             <small class="form-text text-muted">Plan przypisany do licencji. Opcje zależą od konfiguracji produktu.</small>
                         </div>
@@ -188,7 +188,7 @@ $productPlansJson = json_encode(array_map(static function (array $p): array {
     syncDates();
 
     // On submit: remove disabled attribute so values are sent (server validates)
-    document.querySelector('form').addEventListener('submit', function () {
+    document.getElementById('license-create-form').addEventListener('submit', function () {
         [expiresAt, updatesExpiresAt, supportExpiresAt].forEach(function (f) { f.disabled = false; });
     });
 }());

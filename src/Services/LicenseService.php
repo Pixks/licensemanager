@@ -81,7 +81,7 @@ final class LicenseService
         // Lifetime licenses ignore date-based expiry for updates
         if ((int) $license['is_lifetime'] === 1) return true;
         if (!empty($license['updates_expires_at']) && strtotime((string) $license['updates_expires_at']) < time()) return false;
-        return $status === 'active';
+        return !in_array($status, ['expired', 'revoked', 'suspended'], true);
     }
 
     public function supportActive(array $license): bool
@@ -92,7 +92,7 @@ final class LicenseService
         // Lifetime licenses ignore date-based expiry for support
         if ((int) $license['is_lifetime'] === 1) return true;
         if (!empty($license['support_expires_at']) && strtotime((string) $license['support_expires_at']) < time()) return false;
-        return $status === 'active';
+        return !in_array($status, ['expired', 'revoked', 'suspended'], true);
     }
 
     public function isChannelAllowed(array $license, string $channel): bool
