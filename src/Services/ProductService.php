@@ -20,11 +20,25 @@ final class ProductService
     public function getById(int $id): ?array { return Product::find($this->pdo, $id)?->attributes; }
     public function createProduct(array $data): array
     {
-        return Product::create($this->pdo, ['name' => $data['name'], 'slug' => $data['slug'], 'description' => $data['description'] ?? '', 'is_active' => !empty($data['is_active']) ? 1 : 0, 'current_version' => $data['current_version'] ?? null, 'icon_path' => $data['icon_path'] ?? null, 'default_channel' => $data['default_channel'] ?? 'stable', 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'), 'deleted_at' => null])->attributes;
+        return Product::create($this->pdo, ['name' => $data['name'], 'slug' => $data['slug'], 'description' => $data['description'] ?? '', 'is_active' => !empty($data['is_active']) ? 1 : 0, 'current_version' => $data['current_version'] ?? null, 'icon_path' => $data['icon_path'] ?? null, 'default_channel' => $data['default_channel'] ?? 'stable', 'plans' => $this->normalizePlans($data['plans_input'] ?? null), 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'), 'deleted_at' => null])->attributes;
     }
     public function updateProduct(int $id, array $data): void
     {
-        Product::updateById($this->pdo, $id, ['name' => $data['name'], 'slug' => $data['slug'], 'description' => $data['description'] ?? '', 'is_active' => !empty($data['is_active']) ? 1 : 0, 'current_version' => $data['current_version'] ?? null, 'default_channel' => $data['default_channel'] ?? 'stable', 'updated_at' => date('Y-m-d H:i:s')]);
+        Product::updateById($this->pdo, $id, ['name' => $data['name'], 'slug' => $data['slug'], 'description' => $data['description'] ?? '', 'is_active' => !empty($data['is_active']) ? 1 : 0, 'current_version' => $data['current_version'] ?? null, 'default_channel' => $data['default_channel'] ?? 'stable', 'plans' => $this->normalizePlans($data['plans_input'] ?? null), 'updated_at' => date('Y-m-d H:i:s')]);
+    }
+    /** Convert comma-separated plans string to JSON or null */
+    public function normalizePlans(?string $input): ?string
+    {
+        if ($input === null || trim($input) === '') return null;
+        $plans = array_values(array_filter(array_map('trim', explode(',', $input))));
+        return $plans !== [] ? json_encode($plans) : null;
+    }
+    /** Decode JSON plans column to array. Returns [] if not set. */
+    public function getPlans(array $product): array
+    {
+        if (empty($product['plans'])) return [];
+        $decoded = json_decode((string) $product['plans'], true);
+        return is_array($decoded) ? $decoded : [];
     }
     public function addVersion(int $productId, array $data): array
     {
@@ -75,8 +89,9 @@ final class ProductService
     }
     public function latestVersionForChannel(int $productId, string $channel = 'stable'): ?array
     {
-        $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND release_status = "published" AND deleted_at IS NULL AND (channel = :primary_channel OR (:requested_channel = "beta" AND channel = "stable"))');
-        $s->execute(['product_id' => $productId, 'primary_channel' => $channel, 'requested_channel' => $channel]); $versions = $s->fetchAll() ?: [];
+        // Beta channel falls back to stable versions too; use two separate params to avoid PDO named-param reuse issues on SQLite
+        $s = $this->pdo->prepare('SELECT * FROM product_versions WHERE product_id = :product_id AND release_status = "published" AND deleted_at IS NULL AND (channel = :ch1 OR (:ch2 = "beta" AND channel = "stable"))');
+        $s->execute(['product_id' => $productId, 'ch1' => $channel, 'ch2' => $channel]); $versions = $s->fetchAll() ?: [];
         if ($versions === []) return null; usort($versions, static fn (array $a, array $b): int => version_compare($b['version'], $a['version'])); return $versions[0] ?? null;
     }
     public function syncCurrentVersion(int $productId, string $version): void { Product::updateById($this->pdo, $productId, ['current_version' => $version, 'updated_at' => date('Y-m-d H:i:s')]); }

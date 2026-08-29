@@ -14,6 +14,7 @@ final class LicenseService
     public function __construct(private readonly PDO $pdo, private readonly LicenseKeyService $licenseKeyService, private readonly DomainService $domainService, private readonly ProductService $productService, private readonly AuditLogService $auditLogService, private readonly array $appConfig) {}
     public function generateLicenses(array $data, int $quantity = 1): array
     {
+        $data = $this->sanitizeLicenseData($data);
         $created = [];
         for ($i = 0; $i < $quantity; $i++) {
             $plain = $this->licenseKeyService->generate();
@@ -23,10 +24,33 @@ final class LicenseService
                 'first_activated_at' => null, 'expires_at' => $data['expires_at'] ?? null, 'updates_expires_at' => $data['updates_expires_at'] ?? null, 'support_expires_at' => $data['support_expires_at'] ?? null,
                 'is_lifetime' => !empty($data['is_lifetime']) ? 1 : 0, 'customer_email' => $data['customer_email'] ?? null, 'admin_note' => $data['admin_note'] ?? null,
                 'updates_allowed' => !empty($data['updates_allowed']) ? 1 : 0, 'support_active' => !empty($data['support_active']) ? 1 : 0,
+                'allowed_channels' => $data['allowed_channels'] ?? 'stable,beta',
                 'key_hash' => $this->licenseKeyService->hash($plain), 'key_prefix' => $this->licenseKeyService->prefix($plain), 'key_suffix' => $this->licenseKeyService->suffix($plain), 'masked_key' => $this->licenseKeyService->mask($plain), 'deleted_at' => null,
             ])->attributes];
         }
         return $created;
+    }
+
+    /**
+     * Sanitize license data: clear date fields that should not apply based on flags.
+     * - is_lifetime: clears expires_at, updates_expires_at, support_expires_at
+     * - updates_allowed=false: clears updates_expires_at
+     * - support_active=false: clears support_expires_at
+     */
+    public function sanitizeLicenseData(array $data): array
+    {
+        if (!empty($data['is_lifetime'])) {
+            $data['expires_at'] = null;
+            $data['updates_expires_at'] = null;
+            $data['support_expires_at'] = null;
+        }
+        if (empty($data['updates_allowed'])) {
+            $data['updates_expires_at'] = null;
+        }
+        if (empty($data['support_active'])) {
+            $data['support_expires_at'] = null;
+        }
+        return $data;
     }
     public function findLicenseByPlainKey(string $licenseKey): ?array { $s = $this->pdo->prepare('SELECT * FROM licenses WHERE key_hash = :key_hash AND deleted_at IS NULL LIMIT 1'); $s->execute(['key_hash' => $this->licenseKeyService->hash($licenseKey)]); return $s->fetch() ?: null; }
     public function searchLicenses(array $filters = []): array
@@ -37,7 +61,10 @@ final class LicenseService
         if (!empty($filters['customer_email'])) { $where[] = 'l.customer_email LIKE :customer_email'; $params['customer_email'] = '%' . $filters['customer_email'] . '%'; }
         if (!empty($filters['key_fragment'])) { $fragment = strtoupper(preg_replace('/[^A-Z0-9]/i', '', (string) $filters['key_fragment']) ?? ''); $where[] = '(l.key_prefix LIKE :fragment OR l.key_suffix LIKE :fragment OR l.masked_key LIKE :masked_fragment)'; $params['fragment'] = '%' . $fragment . '%'; $params['masked_fragment'] = '%' . $filters['key_fragment'] . '%'; }
         if (!empty($filters['domain'])) { $where[] = 'EXISTS (SELECT 1 FROM license_activations la WHERE la.license_id = l.id AND la.canonical_domain LIKE :domain AND la.deleted_at IS NULL)'; $params['domain'] = '%' . $this->domainService->canonicalize((string) $filters['domain']) . '%'; }
-        $sql = 'SELECT l.*, p.name AS product_name FROM licenses l INNER JOIN products p ON p.id = l.product_id WHERE ' . implode(' AND ', $where) . ' ORDER BY l.id DESC';
+        $limit = max(1, (int) ($filters['limit'] ?? 500));
+        $offset = max(0, (int) ($filters['offset'] ?? 0));
+        $sql = 'SELECT l.*, p.name AS product_name FROM licenses l INNER JOIN products p ON p.id = l.product_id WHERE ' . implode(' AND ', $where) . ' ORDER BY l.id DESC LIMIT :limit OFFSET :offset';
+        $params['limit'] = $limit; $params['offset'] = $offset;
         $s = $this->pdo->prepare($sql); $s->execute($params); return $s->fetchAll() ?: [];
     }
     public function statusForLicense(array $license): string
@@ -49,9 +76,65 @@ final class LicenseService
     public function updatesAllowed(array $license): bool
     {
         if (!(bool) $license['updates_allowed']) return false;
-        if ((int) $license['is_lifetime'] === 1) return !in_array($this->statusForLicense($license), ['revoked', 'suspended'], true);
+        $status = $this->statusForLicense($license);
+        if (in_array($status, ['revoked', 'suspended'], true)) return false;
+        // Lifetime licenses ignore date-based expiry for updates
+        if ((int) $license['is_lifetime'] === 1) return true;
         if (!empty($license['updates_expires_at']) && strtotime((string) $license['updates_expires_at']) < time()) return false;
-        return !in_array($this->statusForLicense($license), ['expired', 'revoked', 'suspended'], true);
+        return !in_array($status, ['expired', 'revoked', 'suspended'], true);
+    }
+
+    public function supportActive(array $license): bool
+    {
+        if (!(bool) $license['support_active']) return false;
+        $status = $this->statusForLicense($license);
+        if (in_array($status, ['revoked', 'suspended'], true)) return false;
+        // Lifetime licenses ignore date-based expiry for support
+        if ((int) $license['is_lifetime'] === 1) return true;
+        if (!empty($license['support_expires_at']) && strtotime((string) $license['support_expires_at']) < time()) return false;
+        return !in_array($status, ['expired', 'revoked', 'suspended'], true);
+    }
+
+    public function isChannelAllowed(array $license, string $channel): bool
+    {
+        $allowed = array_map('trim', explode(',', (string) ($license['allowed_channels'] ?? 'stable,beta')));
+        return in_array($channel, $allowed, true);
+    }
+
+    /**
+     * Resolve the effective channel applying two rules in order:
+     * 1. The channel must be in allowed_channels — otherwise fall back to 'stable'.
+     * 2. Once a license has committed to 'beta' (active_channel = 'beta'), it can never
+     *    return to 'stable'. Any 'stable' request is silently upgraded to 'beta'.
+     */
+    public function resolveChannel(array $license, string $requestedChannel): string
+    {
+        $effective = $this->isChannelAllowed($license, $requestedChannel) ? $requestedChannel : 'stable';
+        // One-way beta lock: if the license has already switched to beta, force beta regardless of request
+        if (($license['active_channel'] ?? null) === 'beta') {
+            return 'beta';
+        }
+        return $effective;
+    }
+
+    /**
+     * Persist the channel choice when a client first switches to beta.
+     * Called after resolveChannel() — only writes when channel is 'beta' and not yet locked.
+     * No-op for 'stable' or already-locked licenses.
+     */
+    public function commitChannel(array $license, string $resolvedChannel): void
+    {
+        if ($resolvedChannel === 'beta' && ($license['active_channel'] ?? null) !== 'beta') {
+            License::updateById($this->pdo, (int) $license['id'], ['active_channel' => 'beta', 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+    }
+
+    /**
+     * Admin-only reset: clears active_channel so the user can switch channels again.
+     */
+    public function resetChannel(int $licenseId): void
+    {
+        License::updateById($this->pdo, $licenseId, ['active_channel' => null, 'updated_at' => date('Y-m-d H:i:s')]);
     }
     public function validateForProduct(string $productSlug, string $licenseKey): array
     {
