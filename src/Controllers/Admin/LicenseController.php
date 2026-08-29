@@ -63,6 +63,16 @@ final class LicenseController extends Controller
         $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'license.updated', 'license', (int) $params['id'], $current, $after->fetch() ?: [], $request->ip());
         return $this->redirect('/admin/licenses/' . $params['id'], 'Licencja została zaktualizowana.');
     }
+    public function resetChannel(Request $request, array $params): Response
+    {
+        $pdo = $this->app->db(); $before = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $before->execute(['id' => $params['id']]); $current = $before->fetch() ?: [];
+        if ($current !== []) {
+            $this->app->licenseService()->resetChannel((int) $params['id']);
+            $after = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $after->execute(['id' => $params['id']]);
+            $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'license.channel_reset', 'license', (int) $params['id'], $current, $after->fetch() ?: [], $request->ip());
+        }
+        return $this->redirect('/admin/licenses/' . $params['id'], 'Blokada kanału została zresetowana.');
+    }
     public function addDomainRule(Request $request, array $params): Response
     {
         \App\Models\LicenseDomainRule::create($this->app->db(), ['license_id' => (int) $params['id'], 'rule_type' => (string) $request->input('rule_type', 'allow'), 'pattern' => (string) $request->input('pattern'), 'notes' => $request->input('notes') ?: null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'), 'deleted_at' => null]);

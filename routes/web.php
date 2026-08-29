@@ -35,6 +35,7 @@ $router->post('/admin/licenses', [LicenseController::class, 'store'], $write);
 $router->get('/admin/licenses/export', [LicenseController::class, 'exportCsv'], $admin);
 $router->get('/admin/licenses/{id}', [LicenseController::class, 'show'], $admin);
 $router->post('/admin/licenses/{id}', [LicenseController::class, 'updateStatus'], $write);
+$router->post('/admin/licenses/{id}/reset-channel', [LicenseController::class, 'resetChannel'], $write);
 $router->post('/admin/licenses/{id}/domain-rules', [LicenseController::class, 'addDomainRule'], $write);
 $router->get('/admin/activations', [ActivationController::class, 'index'], $admin);
 $router->post('/admin/activations/{id}/release', [ActivationController::class, 'release'], $write);

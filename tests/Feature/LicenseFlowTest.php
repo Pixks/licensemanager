@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Controllers\Admin\LicenseController;
 use App\Http\Request;
 use Tests\TestCase;
 
@@ -56,6 +57,25 @@ final class LicenseFlowTest extends TestCase
     {
         $product = $this->createProduct(); $this->addVersion((int) $product['id'], '1.1.0'); $license = $this->createLicense((int) $product['id'], ['updates_allowed' => false]); $this->app->licenseService()->activate($product['slug'], $license['plain_key'], 'example.com', 'https://example.com', null, '127.0.0.1', 'PHPUnit'); $this->expectExceptionMessage('updates_not_allowed'); $this->app->updateService()->check($product['slug'], '1.0.0', $license['plain_key'], 'example.com', 'stable', '127.0.0.1');
     }
+    public function test_beta_channel_cannot_fall_back_to_stable_without_admin_reset(): void
+    {
+        $product = $this->createProduct(); $this->addVersion((int) $product['id'], '1.1.0'); $this->addVersion((int) $product['id'], '1.2.0-beta', 'beta'); $license = $this->createLicense((int) $product['id']); $this->app->licenseService()->activate($product['slug'], $license['plain_key'], 'example.com', 'https://example.com', null, '127.0.0.1', 'PHPUnit');
+        $betaResult = $this->app->updateService()->check($product['slug'], '1.0.0', $license['plain_key'], 'example.com', 'beta', '127.0.0.1');
+        self::assertSame('beta', $betaResult['channel']);
+        self::assertSame('beta', $this->app->licenseService()->findLicenseByPlainKey($license['plain_key'])['active_channel'] ?? null);
+        $stableResult = $this->app->updateService()->check($product['slug'], '1.0.0', $license['plain_key'], 'example.com', 'stable', '127.0.0.1');
+        self::assertSame('beta', $stableResult['channel']);
+    }
+    public function test_admin_can_reset_beta_channel_lock(): void
+    {
+        $product = $this->createProduct(); $license = $this->createLicense((int) $product['id']);
+        $this->app->licenseService()->commitChannel($license['record'], 'beta');
+        $controller = new LicenseController($this->app);
+        $response = $controller->resetChannel($this->makePostRequest('/admin/licenses/' . $license['record']['id'] . '/reset-channel'), ['id' => (string) $license['record']['id']]);
+        self::assertSame(302, $response->status);
+        self::assertSame('/admin/licenses/' . $license['record']['id'], $response->headers['Location'] ?? null);
+        self::assertNull($this->app->licenseService()->findLicenseByPlainKey($license['plain_key'])['active_channel'] ?? null);
+    }
     public function test_download_token_can_be_generated_and_validates(): void
     {
         $product = $this->createProduct(); $version = $this->addVersion((int) $product['id'], '1.1.0'); $license = $this->createLicense((int) $product['id']); $token = $this->app->downloadTokenService()->create((int) $product['id'], (int) $version['id'], (int) $license['record']['id'], 'example.com', '127.0.0.1'); $validated = $this->app->downloadTokenService()->validate($token['plain']); self::assertSame($token['record']['id'], $validated['id']);
@@ -65,5 +85,10 @@ final class LicenseFlowTest extends TestCase
         $product = $this->createProduct(); $version = $this->addVersion((int) $product['id'], '1.1.0'); $license = $this->createLicense((int) $product['id']); $token = $this->app->downloadTokenService()->create((int) $product['id'], (int) $version['id'], (int) $license['record']['id'], 'example.com', '127.0.0.1'); $controller = new \App\Controllers\Api\UpdateApiController($this->app);
         $session = []; $response = $controller->download(new Request(['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/api/v1/updates/download?token=' . $token['plain']], ['token' => $token['plain']], [], [], [], $session, '')); self::assertSame(200, $response->status); self::assertArrayHasKey('Content-Disposition', $response->headers);
         $session2 = []; $invalidResponse = $controller->download(new Request(['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/api/v1/updates/download?token=invalid'], ['token' => 'invalid'], [], [], [], $session2, '')); self::assertSame(403, $invalidResponse->status);
+    }
+    private function makePostRequest(string $uri, array $post = []): Request
+    {
+        $session = [];
+        return new Request(['REQUEST_METHOD' => 'POST', 'REQUEST_URI' => $uri, 'REMOTE_ADDR' => '127.0.0.1'], [], $post, [], [], $session, '');
     }
 }
