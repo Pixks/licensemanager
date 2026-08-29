@@ -1,6 +1,7 @@
 <?php
 $di = static fn(?string $v): string => $v ? str_replace(' ', 'T', substr($v, 0, 16)) : '';
 $allowedChannels = array_map('trim', explode(',', (string) ($license['allowed_channels'] ?? 'stable,beta')));
+$activeChannel = $license['active_channel'] ?? null;
 ?>
 <?php if (!$license): ?><div class="alert alert-danger">Nie znaleziono licencji.</div><?php else: ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -20,6 +21,43 @@ $allowedChannels = array_map('trim', explode(',', (string) ($license['allowed_ch
                     <span class="badge bg-secondary-subtle text-secondary">zamaskowany</span>
                 </div>
                 <small class="text-muted">Pełny klucz nie jest przechowywany w bazie — dostępny tylko w momencie generowania.</small>
+            </div>
+        </div>
+
+        <!-- Blok aktywnego kanału -->
+        <div class="card mb-4 <?= $activeChannel === 'beta' ? 'border-warning' : 'border-0' ?>" style="<?= $activeChannel === 'beta' ? '' : 'background:#f8fafc' ?>">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div>
+                        <label class="form-label fw-semibold small text-muted text-uppercase mb-1" style="letter-spacing:.05em">Aktywny kanał</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <?php if ($activeChannel === 'beta'): ?>
+                                <span class="badge bg-warning-subtle text-warning fs-6 px-3 py-2">
+                                    <i class="bi bi-lock-fill me-1"></i>beta (zablokowany)
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-success-subtle text-success fs-6 px-3 py-2">
+                                    <i class="bi bi-unlock me-1"></i>stable (swobodny)
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <?php if ($activeChannel === 'beta'): ?>
+                                Posiadacz licencji przełączył się na kanał beta — powrót do stable jest zablokowany.
+                            <?php else: ?>
+                                Licencja nie jest zablokowana na żaden kanał. Po przełączeniu na beta przez posiadacza — powrót nie będzie możliwy.
+                            <?php endif; ?>
+                        </small>
+                    </div>
+                    <?php if ($activeChannel === 'beta'): ?>
+                        <form method="post" action="/admin/licenses/<?= e((string) $license['id']) ?>/reset-channel" class="flex-shrink-0">
+                            <input type="hidden" name="<?= e($csrfTokenName) ?>" value="<?= e($csrfToken) ?>">
+                            <button class="btn btn-sm btn-outline-warning" title="Zresetuj blokadę kanału — posiadacz będzie mógł ponownie wybrać kanał">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 

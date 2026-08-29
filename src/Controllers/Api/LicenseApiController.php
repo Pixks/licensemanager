@@ -18,6 +18,7 @@ final class LicenseApiController extends Controller
             $channel = (string) ($request->input('channel', 'stable'));
             $result = $this->app->licenseService()->activate((string) $request->input('product_slug'), $licenseKey, (string) $request->input('domain', ''), (string) $request->input('site_url', ''), $request->input('fingerprint') ?: null, $request->ip(), $request->userAgent());
             $resolvedChannel = $this->app->licenseService()->resolveChannel($result['license'], $channel);
+            $this->app->licenseService()->commitChannel($result['license'], $resolvedChannel);
             return ['success' => true, 'data' => ['status' => 'active', 'license_status' => $result['status'], 'expires_at' => $result['license']['expires_at'], 'updates_expires_at' => $result['license']['updates_expires_at'], 'support_expires_at' => $result['license']['support_expires_at'], 'activations_in_use' => $result['license']['activations_in_use'], 'activation_limit' => $result['license']['activation_limit'], 'canonical_domain' => $result['activation']['canonical_domain'] ?? $this->app->domainService()->canonicalize((string) $request->input('domain', '')), 'reused' => (bool) ($result['activation']['reused'] ?? false), 'channel' => $resolvedChannel, 'allowed_channels' => $result['license']['allowed_channels'] ?? 'stable,beta', 'grace_period_days' => (int) $this->app->config('app.grace_period_days', 10)]];
         });
     }
@@ -36,6 +37,7 @@ final class LicenseApiController extends Controller
             $channel = (string) ($request->input('channel', 'stable'));
             $result = $this->app->licenseService()->check((string) $request->input('product_slug'), $licenseKey, (string) $request->input('domain', ''));
             $resolvedChannel = $this->app->licenseService()->resolveChannel($result['license'], $channel);
+            $this->app->licenseService()->commitChannel($result['license'], $resolvedChannel);
             return ['success' => true, 'data' => ['status' => $result['status'], 'is_active_for_domain' => (bool) $result['activation'], 'canonical_domain' => $result['canonical_domain'], 'expires_at' => $result['license']['expires_at'], 'updates_expires_at' => $result['license']['updates_expires_at'], 'support_expires_at' => $result['license']['support_expires_at'], 'updates_allowed' => $this->app->licenseService()->updatesAllowed($result['license']), 'support_active' => $this->app->licenseService()->supportActive($result['license']), 'activation_limit' => $result['license']['activation_limit'], 'activations_in_use' => $this->app->licenseService()->activeActivationsCount((int) $result['license']['id']), 'channel' => $resolvedChannel, 'allowed_channels' => $result['license']['allowed_channels'] ?? 'stable,beta', 'grace_period_days' => $result['grace_period_days']]];
         });
     }
@@ -46,6 +48,7 @@ final class LicenseApiController extends Controller
             $channel = (string) ($request->input('channel', 'stable'));
             $result = $this->app->licenseService()->heartbeat((string) $request->input('product_slug'), $licenseKey, (string) $request->input('domain', ''));
             $resolvedChannel = $this->app->licenseService()->resolveChannel($result['license'], $channel);
+            $this->app->licenseService()->commitChannel($result['license'], $resolvedChannel);
             return ['success' => true, 'data' => ['status' => $result['status'], 'is_active_for_domain' => (bool) $result['activation'], 'channel' => $resolvedChannel, 'allowed_channels' => $result['license']['allowed_channels'] ?? 'stable,beta', 'grace_period_days' => $result['grace_period_days'], 'checked_at' => date('c')]];
         });
     }

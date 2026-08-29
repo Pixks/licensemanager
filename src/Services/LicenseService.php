@@ -102,11 +102,39 @@ final class LicenseService
     }
 
     /**
-     * Resolve the effective channel: use requested if allowed, otherwise fall back to 'stable'.
+     * Resolve the effective channel applying two rules in order:
+     * 1. The channel must be in allowed_channels — otherwise fall back to 'stable'.
+     * 2. Once a license has committed to 'beta' (active_channel = 'beta'), it can never
+     *    return to 'stable'. Any 'stable' request is silently upgraded to 'beta'.
      */
     public function resolveChannel(array $license, string $requestedChannel): string
     {
-        return $this->isChannelAllowed($license, $requestedChannel) ? $requestedChannel : 'stable';
+        $effective = $this->isChannelAllowed($license, $requestedChannel) ? $requestedChannel : 'stable';
+        // One-way beta lock: if the license has already switched to beta, force beta regardless of request
+        if (($license['active_channel'] ?? null) === 'beta') {
+            return 'beta';
+        }
+        return $effective;
+    }
+
+    /**
+     * Persist the channel choice when a client first switches to beta.
+     * Called after resolveChannel() — only writes when channel is 'beta' and not yet locked.
+     * No-op for 'stable' or already-locked licenses.
+     */
+    public function commitChannel(array $license, string $resolvedChannel): void
+    {
+        if ($resolvedChannel === 'beta' && ($license['active_channel'] ?? null) !== 'beta') {
+            License::updateById($this->pdo, (int) $license['id'], ['active_channel' => 'beta', 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+    }
+
+    /**
+     * Admin-only reset: clears active_channel so the user can switch channels again.
+     */
+    public function resetChannel(int $licenseId): void
+    {
+        License::updateById($this->pdo, $licenseId, ['active_channel' => null, 'updated_at' => date('Y-m-d H:i:s')]);
     }
     public function validateForProduct(string $productSlug, string $licenseKey): array
     {

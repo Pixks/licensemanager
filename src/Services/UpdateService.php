@@ -15,8 +15,9 @@ final class UpdateService
         if (!$this->licenseService->updatesAllowed($license)) throw new RuntimeException('updates_not_allowed');
         $canonicalDomain = $this->domainService->canonicalize($domain);
         if (!$this->licenseService->findActivation((int) $license['id'], $canonicalDomain) && !$this->domainService->isDevelopmentDomain($canonicalDomain)) throw new RuntimeException('domain_not_allowed');
-        // Validate and resolve channel against what the license allows
+        // Validate and resolve channel against what the license allows + one-way beta lock
         $resolvedChannel = $this->licenseService->resolveChannel($license, $channel);
+        $this->licenseService->commitChannel($license, $resolvedChannel);
         $latest = $this->productService->latestVersionForChannel((int) $product['id'], $resolvedChannel);
         if (!$latest || version_compare($latest['version'], $currentVersion, '<=')) return ['update_available' => false, 'product' => $product, 'latest' => $latest, 'channel' => $resolvedChannel];
         $token = $this->downloadTokenService->create((int) $product['id'], (int) $latest['id'], (int) $license['id'], $canonicalDomain, $ip);
