@@ -14,7 +14,16 @@ final class LicenseController extends Controller
     public function create(Request $request): Response { return $this->view('admin/licenses/form', ['pageTitle' => 'Generator licencji', 'products' => $this->app->productService()->listProducts()]); }
     public function store(Request $request): Response
     {
-        $licenses = $this->app->licenseService()->generateLicenses(['product_id' => (int) $request->input('product_id'), 'plan_name' => (string) $request->input('plan_name', 'default'), 'status' => (string) $request->input('status', 'active'), 'activation_limit' => (int) $request->input('activation_limit', 1), 'expires_at' => $request->input('expires_at') ?: null, 'updates_expires_at' => $request->input('updates_expires_at') ?: null, 'support_expires_at' => $request->input('support_expires_at') ?: null, 'is_lifetime' => $request->input('is_lifetime') === '1', 'customer_email' => $request->input('customer_email') ?: null, 'admin_note' => $request->input('admin_note') ?: null, 'updates_allowed' => $request->input('updates_allowed') === '1', 'support_active' => $request->input('support_active') === '1'], max(1, (int) $request->input('quantity', 1)));
+        $planName = (string) $request->input('plan_name', 'default');
+        if (trim($planName) === '') $planName = 'default';
+        $allowedChannelsInput = $request->input('allowed_channels');
+        if (is_array($allowedChannelsInput)) {
+            $allowedChannels = implode(',', array_filter(array_map('trim', $allowedChannelsInput)));
+        } else {
+            $allowedChannels = 'stable,beta';
+        }
+        if ($allowedChannels === '') $allowedChannels = 'stable';
+        $licenses = $this->app->licenseService()->generateLicenses(['product_id' => (int) $request->input('product_id'), 'plan_name' => $planName, 'status' => (string) $request->input('status', 'active'), 'activation_limit' => (int) $request->input('activation_limit', 1), 'expires_at' => $request->input('expires_at') ?: null, 'updates_expires_at' => $request->input('updates_expires_at') ?: null, 'support_expires_at' => $request->input('support_expires_at') ?: null, 'is_lifetime' => $request->input('is_lifetime') === '1', 'customer_email' => $request->input('customer_email') ?: null, 'admin_note' => $request->input('admin_note') ?: null, 'updates_allowed' => $request->input('updates_allowed') === '1', 'support_active' => $request->input('support_active') === '1', 'allowed_channels' => $allowedChannels], max(1, (int) $request->input('quantity', 1)));
         $_SESSION['_generated_licenses'] = array_map(static fn (array $item): array => ['plain_key' => $item['plain_key'], 'masked_key' => $item['record']['masked_key']], $licenses);
         return $this->redirect('/admin/licenses', 'Wygenerowano ' . count($licenses) . ' licencji.');
     }
@@ -32,7 +41,24 @@ final class LicenseController extends Controller
     public function updateStatus(Request $request, array $params): Response
     {
         $pdo = $this->app->db(); $before = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $before->execute(['id' => $params['id']]); $current = $before->fetch() ?: [];
-        \App\Models\License::updateById($pdo, (int) $params['id'], ['status' => (string) $request->input('status', 'active'), 'activation_limit' => (int) $request->input('activation_limit', $current['activation_limit'] ?? 1), 'expires_at' => $request->input('expires_at') ?: null, 'updates_expires_at' => $request->input('updates_expires_at') ?: null, 'support_expires_at' => $request->input('support_expires_at') ?: null, 'updates_allowed' => $request->input('updates_allowed') === '1' ? 1 : 0, 'support_active' => $request->input('support_active') === '1' ? 1 : 0, 'customer_email' => $request->input('customer_email') ?: null, 'admin_note' => $request->input('admin_note') ?: null, 'updated_at' => date('Y-m-d H:i:s')]);
+        $allowedChannelsInput = $request->input('allowed_channels');
+        if (is_array($allowedChannelsInput)) {
+            $allowedChannels = implode(',', array_filter(array_map('trim', $allowedChannelsInput)));
+        } else {
+            $allowedChannels = (string) ($current['allowed_channels'] ?? 'stable,beta');
+        }
+        if ($allowedChannels === '') $allowedChannels = 'stable';
+        $isLifetime = $request->input('is_lifetime') === '1' ? 1 : 0;
+        $updatesAllowed = $request->input('updates_allowed') === '1' ? 1 : 0;
+        $supportActive = $request->input('support_active') === '1' ? 1 : 0;
+        $expiresAt = $request->input('expires_at') ?: null;
+        $updatesExpiresAt = $request->input('updates_expires_at') ?: null;
+        $supportExpiresAt = $request->input('support_expires_at') ?: null;
+        // Server-side sanitize: lifetime clears date fields; disabled flags clear their date fields
+        if ($isLifetime) { $expiresAt = null; $updatesExpiresAt = null; $supportExpiresAt = null; }
+        if (!$updatesAllowed) $updatesExpiresAt = null;
+        if (!$supportActive) $supportExpiresAt = null;
+        \App\Models\License::updateById($pdo, (int) $params['id'], ['status' => (string) $request->input('status', 'active'), 'activation_limit' => (int) $request->input('activation_limit', $current['activation_limit'] ?? 1), 'expires_at' => $expiresAt, 'updates_expires_at' => $updatesExpiresAt, 'support_expires_at' => $supportExpiresAt, 'is_lifetime' => $isLifetime, 'updates_allowed' => $updatesAllowed, 'support_active' => $supportActive, 'customer_email' => $request->input('customer_email') ?: null, 'admin_note' => $request->input('admin_note') ?: null, 'allowed_channels' => $allowedChannels, 'updated_at' => date('Y-m-d H:i:s')]);
         $after = $pdo->prepare('SELECT * FROM licenses WHERE id = :id LIMIT 1'); $after->execute(['id' => $params['id']]);
         $this->app->auditLogService()->log($this->app->auth()->user()['id'] ?? null, 'license.updated', 'license', (int) $params['id'], $current, $after->fetch() ?: [], $request->ip());
         return $this->redirect('/admin/licenses/' . $params['id'], 'Licencja została zaktualizowana.');

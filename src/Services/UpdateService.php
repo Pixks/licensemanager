@@ -15,10 +15,12 @@ final class UpdateService
         if (!$this->licenseService->updatesAllowed($license)) throw new RuntimeException('updates_not_allowed');
         $canonicalDomain = $this->domainService->canonicalize($domain);
         if (!$this->licenseService->findActivation((int) $license['id'], $canonicalDomain) && !$this->domainService->isDevelopmentDomain($canonicalDomain)) throw new RuntimeException('domain_not_allowed');
-        $latest = $this->productService->latestVersionForChannel((int) $product['id'], $channel);
-        if (!$latest || version_compare($latest['version'], $currentVersion, '<=')) return ['update_available' => false, 'product' => $product, 'latest' => $latest];
+        // Validate and resolve channel against what the license allows
+        $resolvedChannel = $this->licenseService->resolveChannel($license, $channel);
+        $latest = $this->productService->latestVersionForChannel((int) $product['id'], $resolvedChannel);
+        if (!$latest || version_compare($latest['version'], $currentVersion, '<=')) return ['update_available' => false, 'product' => $product, 'latest' => $latest, 'channel' => $resolvedChannel];
         $token = $this->downloadTokenService->create((int) $product['id'], (int) $latest['id'], (int) $license['id'], $canonicalDomain, $ip);
-        return ['update_available' => true, 'product' => $product, 'latest' => $latest, 'download_token' => $token, 'download_url' => rtrim((string) $this->appConfig['url'], '/') . '/api/v1/updates/download?token=' . urlencode($token['plain'])];
+        return ['update_available' => true, 'product' => $product, 'latest' => $latest, 'channel' => $resolvedChannel, 'download_token' => $token, 'download_url' => rtrim((string) $this->appConfig['url'], '/') . '/api/v1/updates/download?token=' . urlencode($token['plain'])];
     }
     public function latestProductMeta(string $productSlug, string $channel = 'stable'): ?array
     {
